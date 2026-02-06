@@ -6,7 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 //   Find your Mac's IP: ifconfig | grep "inet " | grep -v 127.0.0.1
 // - For iOS simulator: Use "http://127.0.0.1:8000"
 // - For Android emulator: Use "http://10.0.2.2:8000"
-// 
+//
 // IMPORTANT: Make sure your Mac and phone are on the SAME WiFi network!
 const API_BASE_URL = "http://127.0.0.1:8000";
 
@@ -29,7 +29,7 @@ api.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response interceptor for error handling
@@ -49,7 +49,7 @@ api.interceptors.response.use(
       await AsyncStorage.removeItem("user");
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export const setApiBaseUrl = (url) => {

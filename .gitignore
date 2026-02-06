@@ -43,6 +43,13 @@ backend/uploads/selfies/*
 .env
 .env.local
 
+# Documentation (Markdown)
+*.md
+
+# Start scripts
+start_backend.sh
+start_mobile.sh
+
 
 
 
