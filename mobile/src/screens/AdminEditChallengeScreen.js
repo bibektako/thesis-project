@@ -25,8 +25,23 @@ const AdminEditChallengeScreen = () => {
   const [pointsPerCheckpoint, setPointsPerCheckpoint] = useState("10");
   const [isActive, setIsActive] = useState(true);
   const [checkpoints, setCheckpoints] = useState([]);
+  const [routePoints, setRoutePoints] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const addRoutePoint = () => {
+    setRoutePoints([...routePoints, { latitude: "", longitude: "" }]);
+  };
+
+  const removeRoutePoint = (index) => {
+    setRoutePoints(routePoints.filter((_, i) => i !== index));
+  };
+
+  const updateRoutePoint = (index, field, value) => {
+    const newPoints = [...routePoints];
+    newPoints[index][field] = value;
+    setRoutePoints(newPoints);
+  };
 
   useEffect(() => {
     loadChallenge();
@@ -40,6 +55,12 @@ const AdminEditChallengeScreen = () => {
       setPointsPerCheckpoint(String(data.points_per_checkpoint || 10));
       setIsActive(data.is_active !== false);
       setCheckpoints(data.checkpoints || []);
+      setRoutePoints(
+        (data.route_points || []).map((rp) => ({
+          latitude: String(rp.latitude || ""),
+          longitude: String(rp.longitude || ""),
+        }))
+      );
     } catch (error) {
       Alert.alert("Error", "Failed to load challenge");
       navigation.goBack();
@@ -86,6 +107,12 @@ const AdminEditChallengeScreen = () => {
           gps_required: cp.gps_required,
           gps_radius: typeof cp.gps_radius === "string" ? parseFloat(cp.gps_radius) : cp.gps_radius,
         })),
+        route_points: routePoints
+          .filter((rp) => rp.latitude && rp.longitude)
+          .map((rp) => ({
+            latitude: parseFloat(rp.latitude),
+            longitude: parseFloat(rp.longitude),
+          })),
       };
 
       await updateChallenge(challengeId, challengeData);
@@ -131,7 +158,7 @@ const AdminEditChallengeScreen = () => {
       <View style={styles.content}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Challenge Details</Text>
-          
+
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Title *</Text>
             <TextInput
@@ -294,6 +321,55 @@ const AdminEditChallengeScreen = () => {
           ))}
         </View>
 
+        {/* Route Points Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            Route Points ({routePoints.length})
+          </Text>
+          <Text style={styles.sectionHint}>
+            Define waypoints along the trail to draw the route on the map.
+          </Text>
+
+          {routePoints.map((point, index) => (
+            <View key={index} style={styles.routePointCard}>
+              <View style={styles.routePointHeader}>
+                <Text style={styles.routePointNumber}>📍 Point {index + 1}</Text>
+                <TouchableOpacity onPress={() => removeRoutePoint(index)}>
+                  <Text style={{ color: colors.error, fontWeight: "600" }}>✕ Remove</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.inputRow}>
+                <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.label}>Latitude</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="27.7172"
+                    placeholderTextColor={colors.textLight}
+                    value={point.latitude}
+                    onChangeText={(text) => updateRoutePoint(index, "latitude", text)}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={[styles.inputContainer, { flex: 1 }]}>
+                  <Text style={styles.label}>Longitude</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="85.3240"
+                    placeholderTextColor={colors.textLight}
+                    value={point.longitude}
+                    onChangeText={(text) => updateRoutePoint(index, "longitude", text)}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+            </View>
+          ))}
+
+          <TouchableOpacity style={styles.addRouteButton} onPress={addRoutePoint}>
+            <Text style={styles.addRouteButtonText}>+ Add Route Point</Text>
+          </TouchableOpacity>
+        </View>
+
         <TouchableOpacity
           style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
           onPress={handleSubmit}
@@ -320,6 +396,45 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  sectionHint: {
+    fontSize: 13,
+    color: colors.textLight,
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  routePointCard: {
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  routePointHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  routePointNumber: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.textPrimary,
+  },
+  addRouteButton: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.primary + "40",
+    borderStyle: "dashed",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  addRouteButtonText: {
+    color: colors.primary,
+    fontWeight: "600",
+    fontSize: 14,
   },
   centerContainer: {
     flex: 1,

@@ -92,6 +92,12 @@ export const getCurrentUser = async () => {
   return response.data;
 };
 
+/** Award a single badge (e.g. altitude_aware when user acknowledges altitude warning) */
+export const awardBadge = async (badgeId) => {
+  const response = await api.post('/api/auth/me/badges', { badge_id: badgeId });
+  return response.data;
+};
+
 
 
 

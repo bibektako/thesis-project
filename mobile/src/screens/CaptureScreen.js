@@ -12,16 +12,24 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import CameraView from "../components/CameraView";
+import CancelTrekModal from "../components/CancelTrekModal";
+import BadgesEarnedModal from "../components/BadgesEarnedModal";
 import { getCurrentLocation, requestLocationPermission } from "../utils/gps";
 import { submitCheckpoint } from "../services/submissions";
+import { safeExitChallenge } from "../services/challenges";
+import api from "../services/api";
+import { awardBadge } from "../services/auth";
 import useAuthStore from "../state/useAuthStore";
 import { colors } from "../theme/colors";
+
+const RAPID_ALTITUDE_GAIN_METERS = 200;
+const RAPID_ALTITUDE_TIME_MS = 15 * 60 * 1000;
 
 const CaptureScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { challengeId, challenge } = route.params;
-  const { user } = useAuthStore();
+  const { challengeId, challenge, trekSession } = route.params;
+  const { user, refreshUser } = useAuthStore();
 
   const [currentCheckpointIndex, setCurrentCheckpointIndex] = useState(0);
   const [photo, setPhoto] = useState(null);
@@ -31,6 +39,11 @@ const CaptureScreen = () => {
   const [cameraMode, setCameraMode] = useState("photo");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasLocationPermission, setHasLocationPermission] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showBadgesModal, setShowBadgesModal] = useState(false);
+  const [earnedBadgesResult, setEarnedBadgesResult] = useState(null);
+  const [completedCheckpoints, setCompletedCheckpoints] = useState(0);
+  const [lastAltitudeState, setLastAltitudeState] = useState({ altitude: null, time: null });
 
   const currentCheckpoint = challenge?.checkpoints?.[currentCheckpointIndex];
   const progress = ((currentCheckpointIndex + 1) / (challenge?.checkpoints?.length || 1)) * 100;
@@ -38,6 +51,21 @@ const CaptureScreen = () => {
   useEffect(() => {
     initializePermissions();
   }, []);
+
+  useEffect(() => {
+    if (!challengeId) return;
+    const loadCompleted = async () => {
+      try {
+        const res = await api.get(`/api/submissions?challenge_id=${challengeId}`);
+        const list = res.data || [];
+        const verified = list.filter((s) => s.status === "verified" || s.status === "pending_admin");
+        setCompletedCheckpoints(verified.length);
+      } catch (e) {
+        console.warn("Load submissions for count failed:", e?.message);
+      }
+    };
+    loadCompleted();
+  }, [challengeId]);
 
   const initializePermissions = async () => {
     const locationPermission = await requestLocationPermission();
@@ -51,10 +79,33 @@ const CaptureScreen = () => {
   const captureLocation = async () => {
     try {
       const loc = await getCurrentLocation();
+      const now = Date.now();
+      const prev = lastAltitudeState;
+      if (
+        loc.altitude != null &&
+        prev.altitude != null &&
+        prev.time != null &&
+        now - prev.time < RAPID_ALTITUDE_TIME_MS &&
+        (loc.altitude - prev.altitude) >= RAPID_ALTITUDE_GAIN_METERS
+      ) {
+        Alert.alert(
+          "Altitude warning",
+          "You have ascended quickly. Take it easy, stay hydrated, and watch for signs of altitude sickness. Consider resting before continuing.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                awardBadge("altitude_aware").then(() => refreshUser()).catch(() => {});
+              },
+            },
+          ]
+        );
+      }
+      setLastAltitudeState({ altitude: loc.altitude ?? prev.altitude, time: now });
       setLocation(loc);
       Alert.alert(
         "Location Captured",
-        `Lat: ${loc.latitude.toFixed(6)}\nLng: ${loc.longitude.toFixed(6)}`
+        `Lat: ${loc.latitude.toFixed(6)}\nLng: ${loc.longitude.toFixed(6)}${loc.altitude != null ? `\nAlt: ${Math.round(loc.altitude)} m` : ""}`
       );
     } catch (error) {
       Alert.alert("Error", "Failed to get location");
@@ -107,18 +158,18 @@ const CaptureScreen = () => {
 
       Alert.alert(
         "Submission Successful",
-        `Status: ${result.status}\n${
-          result.status === "verified"
-            ? "Points awarded! 🎉"
-            : "Pending verification"
+        `Status: ${result.status}\n${result.status === "verified"
+          ? "Points awarded! 🎉"
+          : "Pending verification"
         }`,
         [
           {
             text: "OK",
-            onPress: () => {
+              onPress: () => {
               setPhoto(null);
               setSelfie(null);
               setLocation(null);
+              setCompletedCheckpoints((c) => c + 1);
 
               if (
                 currentCheckpointIndex <
@@ -141,6 +192,36 @@ const CaptureScreen = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleViewMap = () => {
+    navigation.navigate("TrekMap", {
+      challenge: challenge,
+      trekSession: trekSession,
+      submissions: [],
+    });
+  };
+
+  const handleCancelTrek = async () => {
+    setShowCancelModal(false);
+    try {
+      const result = await safeExitChallenge(challengeId);
+      setEarnedBadgesResult(result);
+      setShowBadgesModal(true);
+    } catch (error) {
+      Alert.alert(
+        "Error",
+        error.response?.data?.detail || "Safe exit failed. You can still leave the screen."
+      );
+      navigation.navigate("MainTabs");
+    }
+  };
+
+  const handleCloseBadgesModal = () => {
+    setShowBadgesModal(false);
+    setEarnedBadgesResult(null);
+    refreshUser();
+    navigation.navigate("MainTabs");
   };
 
   if (showCamera) {
@@ -170,14 +251,24 @@ const CaptureScreen = () => {
         style={styles.headerGradient}
       >
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="chevron-back" size={20} color={colors.textWhite} />
-            <Text style={styles.backButtonText}>Back</Text>
-          </TouchableOpacity>
+          <View style={styles.headerTopRow}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chevron-back" size={20} color={colors.textWhite} />
+              <Text style={styles.backButtonText}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.mapIconButton}
+              onPress={handleViewMap}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="map-outline" size={20} color={colors.textWhite} />
+              <Text style={styles.mapIconText}>Map</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.progressContainer}>
             <View style={styles.progressBar}>
               <View
@@ -340,7 +431,34 @@ const CaptureScreen = () => {
             </LinearGradient>
           )}
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.cancelTrekButton}
+          onPress={() => setShowCancelModal(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="close-circle-outline" size={18} color={colors.error} />
+          <Text style={styles.cancelTrekButtonText}>Cancel Trek</Text>
+        </TouchableOpacity>
       </View>
+
+      <CancelTrekModal
+        visible={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        onConfirmCancel={handleCancelTrek}
+        checkpointsCompleted={completedCheckpoints}
+        totalCheckpoints={challenge?.checkpoints?.length || 0}
+        challengeTitle={challenge?.title || ""}
+      />
+
+      <BadgesEarnedModal
+        visible={showBadgesModal}
+        onClose={handleCloseBadgesModal}
+        earnedBadges={earnedBadgesResult?.earned_badges || []}
+        completedCheckpoints={earnedBadgesResult?.completed_checkpoints ?? 0}
+        totalCheckpoints={earnedBadgesResult?.total_checkpoints ?? 0}
+        challengeTitle={earnedBadgesResult?.challenge_title ?? ""}
+      />
     </ScrollView>
   );
 };
@@ -528,6 +646,42 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     letterSpacing: 0.5,
+  },
+  headerTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  mapIconButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.backgroundLight + "30",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+  },
+  mapIconText: {
+    color: colors.textWhite,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  cancelTrekButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: colors.error + "30",
+    gap: 6,
+    marginTop: 12,
+  },
+  cancelTrekButtonText: {
+    color: colors.error,
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
 

@@ -28,6 +28,17 @@ export const deleteChallenge = async (challengeId) => {
   return response.data;
 };
 
+/** Safe Exit: abandon challenge and receive badges for completed checkpoints */
+export const safeExitChallenge = async (challengeId) => {
+  const response = await api.post(`/api/challenges/${challengeId}/safe-exit`);
+  return response.data;
+};
+
+export const getBadgesCatalog = async () => {
+  const response = await api.get("/api/challenges/badges/catalog");
+  return response.data;
+};
+
 
 
 

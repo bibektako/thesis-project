@@ -84,6 +84,17 @@ const useAuthStore = create((set, get) => ({
     });
   },
 
+  refreshUser: async () => {
+    try {
+      const currentUser = await getCurrentUser();
+      set({ user: currentUser });
+      return currentUser;
+    } catch (error) {
+      console.error("Refresh user error:", error);
+      return null;
+    }
+  },
+
   setApiBaseUrl: (url) => {
     set({ apiBaseUrl: url });
   },

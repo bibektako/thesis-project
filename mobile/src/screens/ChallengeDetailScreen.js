@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,11 +6,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { getChallenge } from "../services/challenges";
+import { startTrek, getActiveTrek } from "../services/trekSessions";
+import { getSubmissions } from "../services/submissions";
 import { colors } from "../theme/colors";
 
 const ChallengeDetailScreen = () => {
@@ -19,10 +22,17 @@ const ChallengeDetailScreen = () => {
   const { challengeId } = route.params;
   const [challenge, setChallenge] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTrekSession, setActiveTrekSession] = useState(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const [submissions, setSubmissions] = useState([]);
 
-  useEffect(() => {
-    loadChallenge();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadChallenge();
+      checkActiveTrek();
+      loadSubmissions();
+    }, [])
+  );
 
   const loadChallenge = async () => {
     try {
@@ -32,6 +42,47 @@ const ChallengeDetailScreen = () => {
       console.error("Error loading challenge:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const checkActiveTrek = async () => {
+    try {
+      const session = await getActiveTrek(challengeId);
+      setActiveTrekSession(session);
+    } catch (error) {
+      console.log("No active trek session");
+    }
+  };
+
+  const loadSubmissions = async () => {
+    try {
+      const subs = await getSubmissions(challengeId);
+      setSubmissions(subs);
+    } catch (error) {
+      console.log("Failed to load submissions");
+    }
+  };
+
+  const handleStartOrContinueTrek = async () => {
+    if (!challenge) return;
+
+    setIsStarting(true);
+    try {
+      // Start or get existing trek session
+      const session = await startTrek(challenge.id);
+      setActiveTrekSession(session);
+
+      // Navigate to TrekMap
+      navigation.navigate("TrekMap", {
+        challenge: challenge,
+        trekSession: session,
+        submissions: submissions,
+      });
+    } catch (error) {
+      console.error("Start trek error:", error);
+      Alert.alert("Error", error.response?.data?.detail || "Failed to start trek");
+    } finally {
+      setIsStarting(false);
     }
   };
 
@@ -54,6 +105,8 @@ const ChallengeDetailScreen = () => {
   const totalPoints =
     (challenge.points_per_checkpoint || 10) *
     (challenge.checkpoints?.length || 0);
+
+  const completedCount = submissions.filter(s => s.status === "verified").length;
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -85,6 +138,11 @@ const ChallengeDetailScreen = () => {
                 <Text style={styles.statValue}>{totalPoints}</Text>
                 <Text style={styles.statLabel}>Total Points</Text>
               </View>
+              <View style={styles.statDivider} />
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{completedCount}</Text>
+                <Text style={styles.statLabel}>Completed</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -92,65 +150,79 @@ const ChallengeDetailScreen = () => {
 
       <View style={styles.content}>
         <Text style={styles.sectionTitle}>Checkpoints</Text>
-        {challenge.checkpoints?.map((checkpoint, index) => (
-          <View key={checkpoint.checkpoint_id} style={styles.checkpointCard}>
-            <View style={styles.checkpointHeader}>
-              <LinearGradient
-                colors={[colors.accent, "#F97316"]}
-                style={styles.checkpointNumberBadge}
-              >
-                <Text style={styles.checkpointNumber}>{index + 1}</Text>
-              </LinearGradient>
-              <View style={styles.checkpointTitleContainer}>
-                <Text style={styles.checkpointTitle}>{checkpoint.title}</Text>
-                <Text style={styles.checkpointOrder}>
-                  Checkpoint {index + 1} of {challenge.checkpoints.length}
-                </Text>
+        {challenge.checkpoints?.map((checkpoint, index) => {
+          const isCompleted = submissions.some(
+            s => s.checkpoint_id === checkpoint.checkpoint_id && s.status === "verified"
+          );
+          return (
+            <View key={checkpoint.checkpoint_id} style={[styles.checkpointCard, isCompleted && styles.checkpointCardCompleted]}>
+              <View style={styles.checkpointHeader}>
+                <LinearGradient
+                  colors={isCompleted ? [colors.success, colors.secondaryDark] : [colors.accent, "#F97316"]}
+                  style={styles.checkpointNumberBadge}
+                >
+                  {isCompleted ? (
+                    <Ionicons name="checkmark" size={20} color={colors.textWhite} />
+                  ) : (
+                    <Text style={styles.checkpointNumber}>{index + 1}</Text>
+                  )}
+                </LinearGradient>
+                <View style={styles.checkpointTitleContainer}>
+                  <Text style={styles.checkpointTitle}>{checkpoint.title}</Text>
+                  <Text style={styles.checkpointOrder}>
+                    {isCompleted ? "✅ Completed" : `Checkpoint ${index + 1} of ${challenge.checkpoints.length}`}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.checkpointDescription}>
+                {checkpoint.description}
+              </Text>
+              <View style={styles.requirementsContainer}>
+                {checkpoint.require_photo && (
+                  <View style={styles.requirementBadge}>
+                    <Ionicons name="camera-outline" size={16} color={colors.primary} style={styles.requirementEmoji} />
+                    <Text style={styles.requirementText}>Photo</Text>
+                  </View>
+                )}
+                {checkpoint.require_selfie && (
+                  <View style={styles.requirementBadge}>
+                    <Ionicons name="person-circle-outline" size={16} color={colors.primary} style={styles.requirementEmoji} />
+                    <Text style={styles.requirementText}>Selfie</Text>
+                  </View>
+                )}
+                {checkpoint.gps_required && (
+                  <View style={styles.requirementBadge}>
+                    <Ionicons name="location-outline" size={16} color={colors.primary} style={styles.requirementEmoji} />
+                    <Text style={styles.requirementText}>GPS</Text>
+                  </View>
+                )}
               </View>
             </View>
-            <Text style={styles.checkpointDescription}>
-              {checkpoint.description}
-            </Text>
-            <View style={styles.requirementsContainer}>
-              {checkpoint.require_photo && (
-                <View style={styles.requirementBadge}>
-                  <Ionicons name="camera-outline" size={16} color={colors.primary} style={styles.requirementEmoji} />
-                  <Text style={styles.requirementText}>Photo</Text>
-                </View>
-              )}
-              {checkpoint.require_selfie && (
-                <View style={styles.requirementBadge}>
-                  <Ionicons name="person-circle-outline" size={16} color={colors.primary} style={styles.requirementEmoji} />
-                  <Text style={styles.requirementText}>Selfie</Text>
-                </View>
-              )}
-              {checkpoint.gps_required && (
-                <View style={styles.requirementBadge}>
-                  <Ionicons name="location-outline" size={16} color={colors.primary} style={styles.requirementEmoji} />
-                  <Text style={styles.requirementText}>GPS</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        ))}
+          );
+        })}
       </View>
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={styles.startButton}
-          onPress={() =>
-            navigation.navigate("CaptureCheckpoint", {
-              challengeId: challenge.id,
-              challenge: challenge,
-            })
-          }
+          style={[styles.startButton, isStarting && { opacity: 0.7 }]}
+          onPress={handleStartOrContinueTrek}
+          disabled={isStarting}
           activeOpacity={0.8}
         >
           <LinearGradient
             colors={[colors.secondary, colors.secondaryDark]}
             style={styles.startButtonGradient}
           >
-              <Text style={styles.startButtonText}>Start Challenge</Text>
+            {isStarting ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <>
+                <Ionicons name="map-outline" size={20} color={colors.textWhite} style={{ marginRight: 8 }} />
+                <Text style={styles.startButtonText}>
+                  {activeTrekSession ? "Continue Trek" : "Start Challenge"}
+                </Text>
+              </>
+            )}
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -256,6 +328,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  checkpointCardCompleted: {
+    borderWidth: 1.5,
+    borderColor: colors.success + "40",
+    backgroundColor: colors.success + "08",
+  },
   checkpointHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -331,8 +408,10 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   startButtonGradient: {
+    flexDirection: "row",
     padding: 20,
     alignItems: "center",
+    justifyContent: "center",
   },
   startButtonText: {
     color: colors.textWhite,

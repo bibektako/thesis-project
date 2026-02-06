@@ -1,43 +1,31 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from datetime import datetime, timedelta
 from bson import ObjectId
 
 from models.user_model import User, UserCreate, UserLogin, UserResponse
+from pydantic import BaseModel
 from db import get_database
 from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from ml.face_match import extract_face_embedding
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-# Initialize password context with bcrypt
-# Note: bcrypt version check warning can be ignored - functionality works correctly
-import logging
-logging.getLogger("passlib").setLevel(logging.ERROR)
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 def verify_password(plain_password, hashed_password):
-    # Truncate password to 72 bytes (bcrypt limit) for verification
     if isinstance(plain_password, str):
-        plain_password_bytes = plain_password.encode('utf-8')
-    else:
-        plain_password_bytes = plain_password
-    if len(plain_password_bytes) > 72:
-        plain_password_bytes = plain_password_bytes[:72]
-    return pwd_context.verify(plain_password_bytes, hashed_password)
+        plain_password = plain_password.encode('utf-8')
+    if isinstance(hashed_password, str):
+        hashed_password = hashed_password.encode('utf-8')
+    return bcrypt.checkpw(plain_password[:72], hashed_password)
 
 def get_password_hash(password):
-    # Truncate password to 72 bytes (bcrypt limit)
     if isinstance(password, str):
         password = password.encode('utf-8')
-    if len(password) > 72:
-        password = password[:72]
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password[:72], bcrypt.gensalt()).decode('utf-8')
 
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -89,7 +77,8 @@ async def register(user_data: UserCreate):
         "face_consent": user_data.face_consent,
         "face_embedding": None,
         "created_at": datetime.utcnow(),
-        "points": 0
+        "points": 0,
+        "badges": [],
     }
     
     result = await db.users.insert_one(user_dict)
@@ -101,7 +90,8 @@ async def register(user_data: UserCreate):
         email=user_dict["email"],
         role=user_dict["role"],
         points=user_dict["points"],
-        face_consent=user_dict["face_consent"]
+        face_consent=user_dict["face_consent"],
+        badges=user_dict.get("badges", []),
     )
 
 @router.post("/login")
@@ -123,7 +113,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             email=user["email"],
             role=user["role"],
             points=user["points"],
-            face_consent=user.get("face_consent", False)
+            face_consent=user.get("face_consent", False),
+            badges=user.get("badges", []),
         )
     }
 
@@ -135,6 +126,43 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
         email=current_user["email"],
         role=current_user["role"],
         points=current_user["points"],
-        face_consent=current_user.get("face_consent", False)
+        face_consent=current_user.get("face_consent", False),
+        badges=current_user.get("badges", []),
     )
+
+
+# Badge IDs that can be awarded via API (e.g. altitude warning acknowledgment)
+ALLOWED_SINGLE_BADGES = {"altitude_aware"}
+
+
+class AwardBadgeRequest(BaseModel):
+    badge_id: str
+
+
+@router.post("/me/badges", response_model=dict)
+async def award_badge(
+    body: AwardBadgeRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Award a single badge (e.g. altitude_aware when user acknowledges altitude warning)."""
+    badge_id = body.badge_id
+    if badge_id not in ALLOWED_SINGLE_BADGES:
+        raise HTTPException(status_code=400, detail="Invalid or disallowed badge_id")
+    db = get_database()
+    user_id = str(current_user["_id"])
+    from datetime import datetime, timezone
+    new_badge = {
+        "badge_id": badge_id,
+        "earned_at": datetime.now(timezone.utc).isoformat(),
+        "challenge_id": None,
+        "challenge_title": None,
+    }
+    existing = current_user.get("badges") or []
+    if any(b.get("badge_id") == badge_id for b in existing):
+        return {"awarded": False, "message": "Already have this badge"}
+    await db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$push": {"badges": new_badge}},
+    )
+    return {"awarded": True, "badge_id": badge_id}
 

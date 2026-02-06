@@ -171,10 +171,19 @@ async def create_challenge(
             else:
                 checkpoints_list.append(cp.dict())
         
+        # Convert route_points to dict
+        route_points_list = []
+        for rp in challenge_data.route_points:
+            if hasattr(rp, 'model_dump'):
+                route_points_list.append(rp.model_dump())
+            else:
+                route_points_list.append(rp.dict())
+        
         challenge_dict = {
             "title": challenge_data.title,
             "description": challenge_data.description,
             "checkpoints": checkpoints_list,
+            "route_points": route_points_list,
             "created_by": str(admin_user["_id"]),
             "created_at": datetime.now(timezone.utc),
             "is_active": True,
@@ -226,6 +235,14 @@ async def update_challenge(
             else:
                 checkpoints_list.append(cp.dict())
         update_dict["checkpoints"] = checkpoints_list
+    if challenge_data.route_points is not None:
+        route_points_list = []
+        for rp in challenge_data.route_points:
+            if hasattr(rp, 'model_dump'):
+                route_points_list.append(rp.model_dump())
+            else:
+                route_points_list.append(rp.dict())
+        update_dict["route_points"] = route_points_list
     if challenge_data.is_active is not None:
         update_dict["is_active"] = challenge_data.is_active
     if challenge_data.points_per_checkpoint is not None:

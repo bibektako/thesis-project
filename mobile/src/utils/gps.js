@@ -28,6 +28,7 @@ export const getCurrentLocation = async () => {
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
       accuracy: location.coords.accuracy,
+      altitude: location.coords.altitude ?? null,
     };
   } catch (error) {
     console.error("Location error:", error);

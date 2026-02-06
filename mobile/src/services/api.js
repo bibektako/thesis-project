@@ -1,16 +1,14 @@
 import axios from "axios";
-import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Base URL per platform:
-// - iOS simulator: localhost
-// - Android emulator: 10.0.2.2 (host loopback)
-// - Physical devices: replace with your Mac's LAN IP if needed
-const API_BASE_URL = Platform.select({
-  ios: "http://127.0.0.1:8000",
-  android: "http://10.0.2.2:8000",
-  default: "http://127.0.0.1:8000",
-});
+// Base URL configuration:
+// - For physical devices: Use your Mac's LAN IP (e.g., 192.168.2.100)
+//   Find your Mac's IP: ifconfig | grep "inet " | grep -v 127.0.0.1
+// - For iOS simulator: Use "http://127.0.0.1:8000"
+// - For Android emulator: Use "http://10.0.2.2:8000"
+// 
+// IMPORTANT: Make sure your Mac and phone are on the SAME WiFi network!
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,

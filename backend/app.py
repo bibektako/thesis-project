@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from config import ALLOWED_ORIGINS
 from db import connect_db, close_db
-from routers import auth, challenges, submissions, admin, leaderboard
+from routers import auth, challenges, submissions, admin, leaderboard, trek_sessions
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,6 +36,7 @@ app.include_router(challenges.router)
 app.include_router(submissions.router)
 app.include_router(admin.router)
 app.include_router(leaderboard.router)
+app.include_router(trek_sessions.router)
 
 @app.get("/")
 async def root():

@@ -38,6 +38,12 @@ export const getSubmission = async (submissionId) => {
   return response.data;
 };
 
+export const getSubmissions = async (challengeId = null) => {
+  const params = challengeId ? `?challenge_id=${challengeId}` : "";
+  const response = await api.get(`/api/submissions${params}`);
+  return response.data;
+};
+
 
 
 

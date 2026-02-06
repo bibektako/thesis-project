@@ -22,6 +22,8 @@ import AdminSubmissionsScreen from './src/screens/AdminSubmissionsScreen';
 import AdminUsersScreen from './src/screens/AdminUsersScreen';
 import AdminCreateChallengeScreen from './src/screens/AdminCreateChallengeScreen';
 import AdminEditChallengeScreen from './src/screens/AdminEditChallengeScreen';
+import TrekMapScreen from './src/screens/TrekMapScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -50,7 +52,7 @@ function MainTabs() {
       <Tab.Screen
         name="Challenges"
         component={ChallengeListScreen}
-        options={{ 
+        options={{
           tabBarLabel: 'Challenges',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="trail-sign-outline" size={size} color={color} />
@@ -60,7 +62,7 @@ function MainTabs() {
       <Tab.Screen
         name="Progress"
         component={ProgressScreen}
-        options={{ 
+        options={{
           tabBarLabel: 'Progress',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="stats-chart-outline" size={size} color={color} />
@@ -70,13 +72,23 @@ function MainTabs() {
       <Tab.Screen
         name="Leaderboard"
         component={LeaderboardScreen}
-        options={{ 
+        options={{
           tabBarLabel: 'Leaderboard',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="trophy-outline" size={size} color={color} />
           ),
         }}
         initialParams={{ challengeId: 'all' }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          tabBarLabel: 'Profile',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-circle-outline" size={size} color={color} />
+          ),
+        }}
       />
     </Tab.Navigator>
   );
@@ -119,6 +131,7 @@ function AppNavigator() {
             <Stack.Screen name="AdminUsers" component={AdminUsersScreen} />
             <Stack.Screen name="AdminCreateChallenge" component={AdminCreateChallengeScreen} />
             <Stack.Screen name="AdminEditChallenge" component={AdminEditChallengeScreen} />
+            <Stack.Screen name="TrekMap" component={TrekMapScreen} />
           </>
         )}
       </Stack.Navigator>
