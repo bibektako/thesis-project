@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Trek Challenge",
+    "slug": "trek-challenge",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#007AFF"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.trekchallenge.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to camera to capture checkpoint photos and selfies.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to select images.",
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to verify checkpoint visits."
+      }
+    },
+    "android": {
+      "package": "com.trekchallenge.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you select images for checkpoints.",
+          "cameraPermission": "The app accesses your camera to capture checkpoint photos."
+        }
+      ]
+    ]
+  }
+}
+
